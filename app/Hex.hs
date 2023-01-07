@@ -53,8 +53,8 @@ hexGridMesh size innerPercent hgrid = do
   lift $ createMeshWithIxs (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0)
                            (List.cycle [vec3 1 1 1,
                                           vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
-                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders
-                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
+                                          vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, -- Outer hex for borders
+                                          vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4])) ixs
   -- The first of the seven colors is white and represents the center of the
   -- hexagon. The corners are black and the interpolation will make a black
   -- border.

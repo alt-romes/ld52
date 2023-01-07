@@ -43,6 +43,7 @@ type VertexDefs
                                             , "proj" ':-> M 4 4 Float ] )
 
      , "out_col" ':-> Output '[ Location 0 ] (V 3 Float)
+     , "2d_pos"  ':-> Output '[ Location 1 ] (V 2 Float)
      ]
 
 
@@ -50,6 +51,7 @@ type FragmentDefs
       -- Always required to output a color from the fragment shader
   =  '[ "out_col"  ':-> Output '[ Location 0 ] (V 4 Float)
       , "in_color" ':-> Input  '[ Location 0 ] (V 3 Float)
+      , "2d_pos"   ':-> Input  '[ Location 1 ] (V 2 Float)
 
       -- Camera position always passed by the engine (so it's in the descriptor set #0)
       , "camera_pos" ':-> Uniform '[ DescriptorSet 0, Binding 1 ]
@@ -57,6 +59,9 @@ type FragmentDefs
 
       -- Fragment shader
       , "main"    ':-> EntryPoint '[ OriginLowerLeft ] Fragment
+
+
+      , "tile_tex" ':-> Texture2D '[ DescriptorSet 1, Binding 0 ] (RGBA8 UNorm)
       ]
 
 
@@ -70,14 +75,18 @@ vertex = shader do
     projM  <- use @(Name "ubo" :.: Name "proj")
 
     put @"out_col" (Vec3 cx cy cz)
+    put @"2d_pos"  (Vec2 x z)
 
     put @"gl_Position" ((projM !*! viewM !*! modelM) !*^ (Vec4 x y z 1))
 
 fragment :: ShaderModule "main" FragmentShader FragmentDefs _
 fragment = shader do
 
-    ~(Vec3 icx icy icz) <- use @(Name "in_color")
-    ~(Vec3 cx cy cz) <- use @(Name "camera_pos" :.: Name "val")
+    ~(Vec2 px pz)       <- get @"2d_pos"
+    ~(Vec3 icx icy icz) <- get @"in_color"
+    ~(Vec3 camx camy camz) <- use @(Name "camera_pos" :.: Name "val")
 
-    put @"out_col" (Vec4 icx icy icz 1)
+    ~(Vec4 tx ty tz _) <- use @(ImageTexel "tile_tex") NilOps (Vec2 px pz)
+
+    put @"out_col" (Vec4 (icx*tx) (icy*ty) (icz*tz) 1)
 

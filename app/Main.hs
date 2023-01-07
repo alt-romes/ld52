@@ -6,6 +6,8 @@ module Main where
 
 import Ghengin
 import Ghengin.Utils
+import Ghengin.Vulkan.Sampler
+import Ghengin.Asset.Texture
 import Ghengin.Component
 import Ghengin.Component.Transform
 import Ghengin.Component.UI
@@ -30,13 +32,16 @@ data World = World { renderPackets :: !(Storage RenderPacket)
 init :: Ghengin World ()
 init = do
 
+  sampler <- lift $ createSampler FILTER_NEAREST SAMPLER_ADDRESS_MODE_REPEAT
+  sand    <- lift $ texture "assets/IMG_7472.JPG" sampler
+
   settings <- liftIO $ makeSettings @HexSettings
   -- TODO Lens would be good here to access fields of settings directly
 
   gridMesh <- gridMeshFromSettings settings
 
   gridPipeline <- lift $ makeRenderPipeline Shader.shaderPipeline
-  gridMaterial <- lift $ material Done gridPipeline
+  gridMaterial <- lift $ material (Texture2DBinding sand . Done) gridPipeline
 
   let rp1 = renderPacket gridMesh gridMaterial gridPipeline
 
