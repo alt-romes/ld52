@@ -29,7 +29,7 @@ type VertexDefs
      -- For now the three locations (0,1,2) are fixed on the mesh, but later they will not be fixed
   = '[ "in_position" ':-> Input '[ Location 0 ] (V 3 Float)
      , "in_normal"   ':-> Input '[ Location 1 ] (V 3 Float)
-     , "ignored_color" ':-> Input '[ Location 2 ] (V 3 Float)
+     , "in_color"    ':-> Input '[ Location 2 ] (V 3 Float)
 
      -- Entry point, this is the vertex shader
      , "main"        ':-> EntryPoint '[] Vertex
@@ -42,12 +42,14 @@ type VertexDefs
                                   ( Struct '[ "view" ':-> M 4 4 Float
                                             , "proj" ':-> M 4 4 Float ] )
 
+     , "out_col" ':-> Output '[ Location 0 ] (V 3 Float)
      ]
 
 
 type FragmentDefs
       -- Always required to output a color from the fragment shader
-  =  '[ "out_col" ':-> Output '[ Location 0 ] (V 4 Float)
+  =  '[ "out_col"  ':-> Output '[ Location 0 ] (V 4 Float)
+      , "in_color" ':-> Input  '[ Location 0 ] (V 3 Float)
 
       -- Camera position always passed by the engine (so it's in the descriptor set #0)
       , "camera_pos" ':-> Uniform '[ DescriptorSet 0, Binding 1 ]
@@ -62,16 +64,20 @@ vertex :: ShaderModule "main" VertexShader VertexDefs _
 vertex = shader do
     ~(Vec3 x y z)    <- get @"in_position"
     ~(Vec3 nx ny nz) <- get @"in_normal"
+    ~(Vec3 cx cy cz) <- get @"in_color"
     modelM <- use @(Name "push" :.: Name "model")
     viewM  <- use @(Name "ubo" :.: Name "view")
     projM  <- use @(Name "ubo" :.: Name "proj")
+
+    put @"out_col" (Vec3 cx cy cz)
 
     put @"gl_Position" ((projM !*! viewM !*! modelM) !*^ (Vec4 x y z 1))
 
 fragment :: ShaderModule "main" FragmentShader FragmentDefs _
 fragment = shader do
 
+    ~(Vec3 icx icy icz) <- use @(Name "in_color")
     ~(Vec3 cx cy cz) <- use @(Name "camera_pos" :.: Name "val")
 
-    put @"out_col" (Vec4 1 1 1 1)
+    put @"out_col" (Vec4 icx icy icz 1)
 

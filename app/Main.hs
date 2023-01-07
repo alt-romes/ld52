@@ -60,7 +60,7 @@ end = liftIO $ putStrLn "Goodbye"
 
 main :: IO ()
 main = do
-  setLogLevel LogTrace
+  -- setLogLevel LogTrace
   w <- World <$> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit
   ghengin w Main.init undefined update end
 

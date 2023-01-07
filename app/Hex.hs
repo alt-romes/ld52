@@ -39,28 +39,25 @@ createHexGrid = hexHexGrid
 -- (4) Create faces of hexagon using the 3d vertices
 -- (5) Create bottom faces
 -- (6) Create side faces using vertices from bottom and top faces
-hexGridMesh :: Float -> HexHexGrid -> Ghengin w Mesh
-hexGridMesh size hgrid = do
+hexGridMesh :: Float -> Float -> HexHexGrid -> Ghengin w Mesh
+hexGridMesh size innerPercent hgrid = do
   let faceixs = indices hgrid
 
       -- | (1) and (2) and (3)
-      hexfaces = map (makeHexFace size) faceixs
+      hexfaces = map (makeHexFace size innerPercent) faceixs
 
-      -- | (4)
-      hexTriFacesIxs = [1, 2, 0,
-                        2, 3, 0,
-                        3, 4, 0,
-                        4, 5, 0,
-                        5, 6, 0,
-                        6, 1, 0]
-
-      verts = concatMap (\(HexFace c0 c1 c2 c3 c4 c5 c6) -> [c0, c1, c2, c3, c4, c5, c6]) hexfaces
-      ixs   = concatMap (\i -> map (+(i*7)) hexTriFacesIxs) [0..length hexfaces]
+      -- | (4) now done in the hex face
+      verts = concatMap (\(HexFace vs _) -> vs) hexfaces
+      ixs   = concatMap (\(HexFace _ ixs, i) -> map (+(i*13)) ixs) (zip hexfaces [0..length hexfaces]) -- 13 is number of vertices per face
       
-  lift $ createMeshWithIxs (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0) (List.repeat $ vec3 0 0 0)) ixs
+  lift $ createMeshWithIxs (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0) (List.cycle [vec3 1 1 1, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
+  -- The first of the seven colors is white and represents the center of the
+  -- hexagon. The corners are black and the interpolation will make a black
+  -- border.
 
--- | Hex face: center vertex and all 6 corner vertices (C1,C2,C3,C4,C5,C6), and triangular faces
-data HexFace = HexFace !Vec3 !Vec3 !Vec3 !Vec3 !Vec3 !Vec3 !Vec3
+-- | Hex face: the vertices and indices to form a face
+data HexFace = HexFace ![Vec3] -- ^ vertices in this face
+                       ![Int]  -- ^ indices
   deriving Show
 
 -- | ...
@@ -74,9 +71,12 @@ hexGridTo2DWorld :: Float -> Index HexHexGrid -> (Float, Float)
 hexGridTo2DWorld size (fromIntegral -> q, fromIntegral -> r) = (size * (sqrt 3 * q + (sqrt 3/2) * r), size * (3/2) * r)
 
 -- Corners are working fine
+--
+-- We will need to duplicate each corner per corner ix.
+-- One for the inner hex and other for the outer one
 hexCornerOffset :: Float -- ^ Size
                 -> Int   -- ^ Hex corner ix ∈ [0,6[
-                -> (Float, Float)
+                -> (Float, Float) -- ^ The outer hex coords.
 hexCornerOffset size ix =
   let angle = case ix of
                 0 -> 2*pi*0.5/6
@@ -89,18 +89,41 @@ hexCornerOffset size ix =
    in (size * cos angle, size * sin angle)
 
 -- | A Hex face is composed of one center, 6 corners, and 6 triangular faces composed of them
-makeHexFace :: Float -> Index HexHexGrid -> HexFace
-makeHexFace size (q, r) =
+makeHexFace :: Float -> Float -> Index HexHexGrid -> HexFace
+makeHexFace size percent (q, r) =
   let
     c0@(cx,cz) = hexGridTo2DWorld size (q,r)
-    [c1,c2,c3,c4,c5,c6] = map ((\(cnx,cnz) -> vec3 (cnx + cx) 1 (cnz + cz)) . hexCornerOffset size) [0..5]
+    corners@[c1,c2,c3,c4,c5,c6] = map ((\(cnx,cnz) -> vec3 (cnx + cx) 1 (cnz + cz)) . hexCornerOffset size) [0..5]
+    innerCorners@[c1i,c2i,c3i,c4i,c5i,c6i] = map (\(WithVec3 x y z) -> vec3 (x*percent) y (z*percent)) corners 
+    
   in
-    HexFace (vec3 cx 1 cz) c1 c2 c3 c4 c5 c6
+    --        C0           1    2     3   4     5   6    7    8   9  10  11  12
+    HexFace [vec3 cx 1 cz, c1i, c2i, c3i, c4i, c5i, c6i, c1, c2, c3, c4, c5, c6]
+            ([1, 2, 0, -- Inner hex triangle faces
+             2, 3, 0,
+             3, 4, 0,
+             4, 5, 0,
+             5, 6, 0,
+             6, 1, 0]
+             <> [ 7, 2, 1 -- Quads between outer and inner triangle
+                , 7, 8, 2
+                , 8, 3, 2
+                , 8, 9, 3
+                , 9, 4, 3
+                , 9, 10, 4
+                , 10, 5, 4
+                , 10, 11, 5
+                , 11, 6, 5
+                , 11, 12, 6
+                , 12, 1, 6
+                , 12, 7, 1
+                ])
 
 
 
 data HexSettings = HexSettings { hexSize :: !(IORef Float)
                                , gridSize :: !(IORef Int)
+                               , innerHexPercent :: !(IORef Float)
                                }
 
 instance UISettings HexSettings where
@@ -108,14 +131,15 @@ instance UISettings HexSettings where
   type ReactivityOutput HexSettings = ()
   type ReactivityConstraints HexSettings w = (HasField "renderPackets" w (Storage RenderPacket))
   
-  makeSettings = HexSettings <$> newIORef 1 <*> newIORef 1
+  makeSettings = HexSettings <$> newIORef 1 <*> newIORef 1 <*> newIORef 0.9
 
-  makeComponents s@(HexSettings hs gs) () = do
+  makeComponents s@(HexSettings hs gs ip) () = do
     b1 <- sliderFloat "Hex Size" hs 0 15
-    b2 <- sliderInt   "Grid Size" gs 0 15
+    b2 <- sliderInt   "Grid Size" gs 1 15
+    b3 <- sliderFloat "Inner Hex" ip 0 1
 
     -- When changed:
-    when (or [b1,b2]) $ do
+    when (or [b1,b2,b3]) $ do
 
       newMesh <- gridMeshFromSettings s
 
@@ -127,8 +151,9 @@ instance UISettings HexSettings where
       pure ()
 
 gridMeshFromSettings :: HexSettings -> Ghengin w Mesh
-gridMeshFromSettings (HexSettings hs gs) = do
+gridMeshFromSettings (HexSettings hs gs ip) = do
   hexS <- liftIO $ readIORef hs
   gridS <- liftIO $ readIORef gs
+  ipS   <- liftIO $ readIORef ip
 
-  hexGridMesh hexS (createHexGrid gridS)
+  hexGridMesh hexS ipS (createHexGrid gridS)
