@@ -48,9 +48,13 @@ hexGridMesh size innerPercent hgrid = do
 
       -- | (4) now done in the hex face
       verts = concatMap (\(HexFace vs _) -> vs) hexfaces
-      ixs   = concatMap (\(HexFace _ ixs, i) -> map (+(i*13)) ixs) (zip hexfaces [0..length hexfaces]) -- 13 is number of vertices per face
+      ixs   = concatMap (\(HexFace _ ixs, i) -> map (+(i*19)) ixs) (zip hexfaces [0..length hexfaces]) -- 19 is number of vertices per face
       
-  lift $ createMeshWithIxs (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0) (List.cycle [vec3 1 1 1, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
+  lift $ createMeshWithIxs (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0)
+                           (List.cycle [vec3 1 1 1,
+                                          vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
+                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders
+                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
   -- The first of the seven colors is white and represents the center of the
   -- hexagon. The corners are black and the interpolation will make a black
   -- border.
@@ -98,26 +102,26 @@ makeHexFace size percent (q, r) =
       = map ((\((cnx,cnz), (cnix,cniz)) -> (vec3 (cnx + cx) 1 (cnz + cz), vec3 (cnix + cx) 1 (cniz + cz)) ) . hexCornerOffset size percent) [0..5]
     
   in
-    --        C0           1    2     3   4     5   6    7    8   9  10  11  12
-    HexFace [vec3 cx 1 cz, c1i, c2i, c3i, c4i, c5i, c6i, c1, c2, c3, c4, c5, c6]
+    --        C0           1    2     3   4     5   6    7    8     9   10    11  12   13  14  15  16  17  18
+    HexFace [vec3 cx 1 cz, c1i, c2i, c3i, c4i, c5i, c6i, c1i, c2i, c3i, c4i, c5i, c6i, c1, c2, c3, c4, c5, c6]
             ([1, 2, 0, -- Inner hex triangle faces
              2, 3, 0,
              3, 4, 0,
              4, 5, 0,
              5, 6, 0,
              6, 1, 0]
-             <> [ 7, 2, 1 -- Quads between outer and inner triangle
-                , 7, 8, 2
-                , 8, 3, 2
-                , 8, 9, 3
-                , 9, 4, 3
-                , 9, 10, 4
-                , 10, 5, 4
-                , 10, 11, 5
-                , 11, 6, 5
-                , 11, 12, 6
-                , 12, 1, 6
-                , 12, 7, 1
+             <> [ 13, 8, 7 -- Quads between outer and inner triangle
+                , 13, 14, 8
+                , 14, 9, 8
+                , 14, 15, 9
+                , 15, 10, 9
+                , 15, 16, 10
+                , 16, 11, 10
+                , 16, 17, 11
+                , 17, 12, 11
+                , 17, 18, 12
+                , 18, 7, 12
+                , 18, 13, 7
                 ])
 
 
