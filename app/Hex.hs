@@ -75,9 +75,10 @@ hexGridTo2DWorld size (fromIntegral -> q, fromIntegral -> r) = (size * (sqrt 3 *
 -- We will need to duplicate each corner per corner ix.
 -- One for the inner hex and other for the outer one
 hexCornerOffset :: Float -- ^ Size
+                -> Float -- ^ Inner percent
                 -> Int   -- ^ Hex corner ix ∈ [0,6[
-                -> (Float, Float) -- ^ The outer hex coords.
-hexCornerOffset size ix =
+                -> ((Float, Float), (Float, Float)) -- ^ The outer and inner hex coords respectively
+hexCornerOffset size percent ix =
   let angle = case ix of
                 0 -> 2*pi*0.5/6
                 1 -> 2*pi*1.5/6
@@ -86,15 +87,15 @@ hexCornerOffset size ix =
                 4 -> 2*pi*4.5/6
                 5 -> 2*pi*5.5/6
                 i -> error $ "Unexpected corner index " <> show i
-   in (size * cos angle, size * sin angle)
+   in ((size * cos angle, size * sin angle), (size * cos angle * percent, size * sin angle * percent))
 
 -- | A Hex face is composed of one center, 6 corners, and 6 triangular faces composed of them
 makeHexFace :: Float -> Float -> Index HexHexGrid -> HexFace
 makeHexFace size percent (q, r) =
   let
     c0@(cx,cz) = hexGridTo2DWorld size (q,r)
-    corners@[c1,c2,c3,c4,c5,c6] = map ((\(cnx,cnz) -> vec3 (cnx + cx) 1 (cnz + cz)) . hexCornerOffset size) [0..5]
-    innerCorners@[c1i,c2i,c3i,c4i,c5i,c6i] = map (\(WithVec3 x y z) -> vec3 (x*percent) y (z*percent)) corners 
+    corners@[(c1,c1i),(c2,c2i),(c3,c3i),(c4,c4i),(c5,c5i),(c6,c6i)]
+      = map ((\((cnx,cnz), (cnix,cniz)) -> (vec3 (cnx + cx) 1 (cnz + cz), vec3 (cnix + cx) 1 (cniz + cz)) ) . hexCornerOffset size percent) [0..5]
     
   in
     --        C0           1    2     3   4     5   6    7    8   9  10  11  12
