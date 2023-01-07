@@ -118,8 +118,11 @@ instance UISettings HexSettings where
     when (or [b1,b2]) $ do
 
       newMesh <- gridMeshFromSettings s
+
       -- Update all hexagons
-      cmap $ \(RenderPacket _oldMesh mat pipeline k) -> RenderPacket newMesh mat pipeline k
+      cmapM $ \(RenderPacket oldMesh mat pipeline k) -> do
+        lift $ freeMesh oldMesh
+        pure $ RenderPacket newMesh mat pipeline k
 
       pure ()
 
