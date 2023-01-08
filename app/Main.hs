@@ -16,9 +16,11 @@ import Ghengin.Utils
 import Ghengin.Vulkan.Sampler
 import Ghengin.Component.Mesh
 import Ghengin.Component.Mesh.Sphere
+import Ghengin.Component.Mesh.Hex
 import Ghengin.Asset.Texture
 import Ghengin.Component
 import Ghengin.Component.Transform
+import Ghengin.Component.Transform.Animation
 import Ghengin.Component.UI
 import Ghengin.Component.Camera
 import Ghengin.Component.Material
@@ -77,25 +79,41 @@ init = do
   pure (sand, grass,sampler)
 
 
-movePlayer :: DeltaTime -> Maybe HexDirection -> Ghengin World ()
-movePlayer dt d = do
+movePlayer :: DeltaTime -> HexDirection -> Ghengin World ()
+movePlayer dt hexDir = do
   -- If player is moving
-  --  (1) Keep moving in the same direction by altering the transform of the player (the camera follows the player)
+  --  (1) Keep moving in the same direction by altering the transform of the player (the camera follows the player) (handled by transform animation)
   --
   -- At the beginning of a movement (if we weren't already moving)
   --  (1) Add 3 tiles in the direction we are travelling in
   --  (2) Set the player to moving
-  --  (3) Move along the hex axis
+  --  (3) Move along the hex axis (handled by transform animation)
   --
+  -- Handled by transform animation:
   -- When we reach the destination tile
   --  (1) End the movement
   --  (2) Drop the three tiles we left behind (animate through the transform by setting to "dropping")
   --
-  -- Actually, the last two bits could fit in a generic "update entities" that moves if the things are moving, and stops moving if reached
-  -- liftIO $ print d
+  cmapM \(Player, manim :: Maybe (TransformAnimation World), Transform pos _ _) ->
+    case manim of
+      Nothing -> do
+        -- We weren't in an animation, so we start one to the next tile
+        pure (Just (transformAnimation (vecFromHexDir 1 hexDir) pos (pure ())))
+      Just ta -> do
+        pure (Just ta)
+
   pure ()
 
-  
+vecFromHexDir :: Float -> HexDirection -> Vec3
+vecFromHexDir size = \case
+  Northwest -> liftHexCoord size (-1,1) - center
+  Northeast -> liftHexCoord size (0,1)  - center
+  West      -> liftHexCoord size (-1,0) - center
+  East      -> liftHexCoord size (1,0)  - center
+  Southwest -> liftHexCoord size (0,-1) - center
+  Southeast -> liftHexCoord size (1,-1) - center
+  where
+    center = liftHexCoord size (0,0)
 
 update :: _ -> DeltaTime -> Ghengin World Bool
 update _ dt = do
@@ -103,25 +121,25 @@ update _ dt = do
   cmapM $ \(_ :: Camera, tr :: Transform) -> lift $ updateFirstPersonCameraTransform dt tr
 
   -- Left up
-  ifPressed Key'U (movePlayer dt $ Just Northwest) (pure ())
+  ifPressed Key'U (movePlayer dt Northwest) (pure ())
 
   -- Right up
-  ifPressed Key'I (movePlayer dt $ Just Northeast) (pure ())
+  ifPressed Key'I (movePlayer dt Northeast) (pure ())
 
   -- Left
-  ifPressed Key'H (movePlayer dt $ Just West) (pure ())
+  ifPressed Key'H (movePlayer dt West) (pure ())
 
   -- Right
-  ifPressed Key'L (movePlayer dt $ Just East) (pure ())
+  ifPressed Key'K (movePlayer dt East) (pure ())
 
   -- Left down
-  ifPressed Key'N (movePlayer dt $ Just Southwest) (pure ())
+  ifPressed Key'N (movePlayer dt Southwest) (pure ())
 
   -- Right down
-  ifPressed Key'M (movePlayer dt $ Just Southeast) (pure ())
+  ifPressed Key'M (movePlayer dt Southeast) (pure ())
 
-  -- Move player if it has started moving but not finished, even if nothing was pressed
-  movePlayer dt Nothing
+  -- Always update transform animations
+  transformAnimationUpdate 1 dt
 
   pure False
 
@@ -137,7 +155,7 @@ end (sand,grass,samp) = do
 main :: IO ()
 main = do
   -- setLogLevel LogTrace
-  w <- World <$> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit
+  w <- World <$> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit
   ghengin w Main.init undefined update end
 
 radians :: Floating a => a -> a

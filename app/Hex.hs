@@ -19,6 +19,7 @@ import Ghengin.Vulkan
 import Ghengin.Scene.Graph
 import Ghengin.Component.Camera
 import Ghengin.Component.Transform
+import Ghengin.Component.Transform.Animation
 import Ghengin.Component.Mesh
 import Ghengin.Component
 import Ghengin.Component.UI
@@ -37,6 +38,7 @@ instance Component Player where type Storage Player = Unique Player
 -- This world is pretty bothersome, we gotta check where it's better to have it live.
 data World = World { renderPackets :: !(Storage RenderPacket)
                    , transforms    :: !(Storage Transform)
+                   , transformAnimations    :: !(Storage (TransformAnimation World))
                    , modelMatrices :: !(Storage ModelMatrix)
                    , cameras       :: !(Storage Camera)
                    , uiwindows     :: !(Storage (UIWindow World))
