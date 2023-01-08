@@ -21,9 +21,10 @@ import Ghengin.Component.Camera
 import Ghengin.Component.Transform
 import Ghengin.Component.Transform.Animation
 import Ghengin.Component.Mesh
-import Ghengin.Component
+import Ghengin.Component hiding (get)
 import Ghengin.Component.UI
 import Ghengin.Render.Packet
+import Ghengin.Utils (get)
 import Ghengin
 import Numeric.Noise
 
@@ -32,7 +33,7 @@ import Math.Geometry.Grid.Hexagonal
 
 type HexMaterial = '[Vec3, Texture2D]
 
-data Player = Player
+data Player = Player Int Int -- ^ Position where it's at
 instance Component Player where type Storage Player = Unique Player
 
 -- This world is pretty bothersome, we gotta check where it's better to have it live.
@@ -48,6 +49,19 @@ data World = World { renderPackets :: !(Storage RenderPacket)
                    , player        :: !(Storage Player)
                    }
 
+makeHexMeshes :: Float -> Float -> Ghengin w [Mesh]
+makeHexMeshes size percent = do
+  flatMesh <- lift $
+    case makeHexFace size percent (0,0) of
+      (HexFace _ _ verts ixs) -> do
+        createMeshWithIxs
+            (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0)
+                                   (List.cycle [vec3 1 1 1,
+                                          vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
+                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders
+                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
+  pure [flatMesh]
+
 
 data Hexagon = Hexagon Int Int
   deriving Show
@@ -56,9 +70,6 @@ instance Component Hexagon where type Storage Hexagon = Map Hexagon
 -- | Create a hexagonal grid with given size centered on the axial coordinates (0,0)
 createHexGrid :: Int -> HexHexGrid
 createHexGrid = hexHexGrid
-
--- TODO: Ideally we would be able to upload a big mesh and index into it depending on the hex tile
--- Why are 15 tiles ridiculously slow? Batching the vertices really does make a difference
 
 -- | Generate a renderable mesh from a HexGrid.
 --
@@ -75,20 +86,9 @@ createHexGrid = hexHexGrid
 -- (4) Create faces of hexagon using the 3d vertices
 -- (5) Create bottom faces
 -- (6) Create side faces using vertices from bottom and top faces
-hexGridMeshes :: Float -> Float -> HexHexGrid -> Ghengin w (M.Map (Int,Int) (Transform,Mesh))
-hexGridMeshes size innerPercent hgrid = do
+hexGridMeshes :: Float -> [Mesh] -> HexHexGrid -> Ghengin w (M.Map (Int,Int) (Transform,Mesh))
+hexGridMeshes size (head -> flatMesh) hgrid = do
   let faceixs = indices hgrid
-
-  flatMesh <- lift $
-    case makeHexFace size innerPercent (0,0) of
-      (HexFace _ _ verts ixs) -> do
-        createMeshWithIxs
-            (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0)
-                                   (List.cycle [vec3 1 1 1,
-                                          vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
-                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders
-                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
-
   pure $ foldr (\(q,r) -> M.insert (q,r) (Transform (liftHexCoord size (q,r)) (vec3 1 1 1) (vec3 0 0 0), flatMesh)) mempty faceixs
 
 -- noiseVal (WithVec3 x y z) = ((double2Float $ coherentNoise 0 (float2Double x * 20, float2Double y * 20, float2Double z * 20)) + 1)
@@ -96,41 +96,45 @@ hexGridMeshes size innerPercent hgrid = do
 
 -- * Hex settings
 
-data HexSettings = HexSettings { hexSize :: !(IORef Float)
-                               , gridSize :: !(IORef Int)
-                               , innerHexPercent :: !(IORef Float)
-                               }
+-- The settings thing is very confusing. We need a better design for this on the
+-- engine side.
+-- Settings are a terrible design
 
-instance UISettings HexSettings where
-  type ReactivityInput  HexSettings = M.Map (Int,Int) (Transform,Mesh) -> SceneGraph World ()
-  type ReactivityOutput HexSettings = ()
-  type ReactivityConstraints HexSettings w = (w ~ World, HasField "renderPackets" w (Storage RenderPacket), Has w (Renderer ()) Hexagon)
+-- data HexSettings = HexSettings { hexSize :: !(IORef Float)
+--                                , gridSize :: !(IORef Int)
+--                                , innerHexPercent :: !(IORef Float)
+--                                }
+
+-- instance UISettings HexSettings where
+--   type ReactivityInput  HexSettings = M.Map (Int,Int) (Transform,Mesh) -> SceneGraph World ()
+--   type ReactivityOutput HexSettings = ()
+--   type ReactivityConstraints HexSettings w = (w ~ World, HasField "renderPackets" w (Storage RenderPacket), Has w (Renderer ()) Hexagon)
   
-  makeSettings = HexSettings <$> newIORef 1 <*> newIORef 2 <*> newIORef 0.9
+--   makeSettings = HexSettings <$> newIORef 1 <*> newIORef 2 <*> newIORef 0.9
 
-  makeComponents s@(HexSettings hs gs ip) makeRenderTiles = do
-    b1 <- sliderFloat "Hex Size" hs 0 15
-    b2 <- sliderInt   "Grid Size" gs 1 15
-    b3 <- sliderFloat "Inner Hex" ip 0 1
+--   makeComponents s@(HexSettings hs gs ip) makeRenderTiles = do
+--     b1 <- sliderFloat "Hex Size" hs 0 15
+--     b2 <- sliderInt   "Grid Size" gs 1 15
+--     b3 <- sliderFloat "Inner Hex" ip 0 1
 
-    -- When changed:
-    when (V.or [b1,b2,b3]) $ do
+--     -- When changed:
+--     when (V.or [b1,b2,b3]) $ do
 
-      newMeshes <- gridFromSettings s
+--       newMeshes <- gridFromSettings s
 
-      -- For now, we simply delete all hexagons but the center which has the special mat and re-do them from scratch
+--       -- For now, we simply delete all hexagons but the center which has the special mat and re-do them from scratch
 
-      cmapM $ \(Hexagon _ _, (RenderPacket oldMesh _ _ _)) -> lift (freeMesh oldMesh) >> pure (Nothing :: Maybe RenderPacket)
+--       cmapM $ \(Hexagon _ _, (RenderPacket oldMesh _ _ _)) -> lift (freeMesh oldMesh) >> pure (Nothing :: Maybe RenderPacket)
       
-      sceneGraph $ makeRenderTiles newMeshes
+--       sceneGraph $ makeRenderTiles newMeshes
 
-      pure ()
+--       pure ()
 
-gridFromSettings :: HexSettings -> Ghengin w (M.Map (Int,Int) (Transform, Mesh))
-gridFromSettings (HexSettings hs gs ip) = do
-  hexS  <- liftIO $ readIORef hs
-  gridS <- liftIO $ readIORef gs
-  ipS   <- liftIO $ readIORef ip
+-- gridFromSettings :: HexSettings -> Ghengin w (M.Map (Int,Int) (Transform, Mesh))
+-- gridFromSettings (HexSettings hs gs ip) = do
+--   hexS  <- liftIO $ readIORef hs
+--   gridS <- liftIO $ readIORef gs
+--   ipS   <- liftIO $ readIORef ip
 
-  hexGridMeshes hexS ipS (createHexGrid gridS)
+--   hexGridMeshes hexS undefined (createHexGrid gridS)
 
