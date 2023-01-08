@@ -90,10 +90,10 @@ fragment = shader do
 
     ~(Vec4 tx ty tz _) <- use @(ImageTexel "tile_tex") NilOps (Vec2 px pz)
 
-    let isBorder = icx == 0
+    let isBorder = icx /= 1
 
     if isBorder then put @"out_col" (Vec4 bcr bcg bcb 1)
-                else put @"out_col" (Vec4 (icx*tx) (icy*ty) (icz*tz) 1)
+                else put @"out_col" (Vec4 (tx) (ty) (tz) 1)
 
 -- TODO: Sinusoidal animations
 

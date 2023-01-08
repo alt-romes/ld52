@@ -74,7 +74,8 @@ executable ld52
                       grid >= 7.8,
                       text,
                       vector,
-                      containers
+                      containers,
+                      hsnoise
 
     -- Directories containing source files.
     hs-source-dirs:   app
