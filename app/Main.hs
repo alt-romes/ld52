@@ -18,7 +18,7 @@ import Ghengin
 import Ghengin.Utils
 import Ghengin.Vulkan.Sampler
 import Ghengin.Component.Mesh
-import Ghengin.Component.Mesh.Sphere
+import Ghengin.Component.Mesh.Sphere hiding (UnitFace(..), UnitSphere(..))
 import Ghengin.Component.Mesh.Hex
 import Ghengin.Asset.Texture
 import Ghengin.Component
@@ -30,13 +30,13 @@ import Ghengin.Component.Material
 import Ghengin.Scene.Graph
 import Ghengin.Render.Packet
 import Ghengin.Input
-import Numeric.Noise
 
 import Math.Geometry.Grid.HexagonalInternal (HexDirection(..))
 import Math.Geometry.Grid.Hexagonal
 import Math.Geometry.Grid hiding (size)
 
 import qualified Shader
+import Map hiding (HexMaterial)
 import Hex
 
 pattern SIZE :: Float
@@ -50,6 +50,7 @@ data Game p = Game { meshes :: [Mesh]
                    , textures :: [Texture2D]
                    , pipeline :: RenderPipeline p
                    , sampler  :: Sampler
+                   , terrain  :: Terrain
                    }
 
 init :: Ghengin World (Game _)
@@ -57,22 +58,23 @@ init = do
 
   sampler <- lift $ createSampler FILTER_LINEAR SAMPLER_ADDRESS_MODE_REPEAT
   sand    <- lift $ texture "assets/Sand.jpg" sampler
-  grass   <- lift $ texture "assets/Grass.jpg" sampler -- heavy image...
-
-  -- settings <- liftIO $ makeSettings @HexSettings
+  grass   <- lift $ texture "assets/Grass.jpg" sampler
 
   meshes <- makeHexMeshes SIZE 0.92
-  -- gridMeshes <- gridFromSettings settings
 
   pipeline <- lift $ makeRenderPipeline Shader.shaderPipeline
   sandMat  <- lift $ material (StaticBinding (vec3 0.9 0.75 0) . Texture2DBinding sand . Done) pipeline
   grassMat <- lift $ material (StaticBinding (vec3 0.2 1 0.2) . Texture2DBinding grass . Done) pipeline
 
+  let mats = [sandMat, grassMat, sandMat]
+
   pl <- lift $ newSphereMesh 20 Nothing
+
+  let terrain = makeTerrain (indices $ hexHexGrid 100) mats meshes
 
   sceneGraph do
 
-    makeRenderTiles pipeline [sandMat, grassMat] meshes ((0,0):neighbours UnboundedHexGrid (0,0))
+    makeRenderTiles pipeline terrain ((0,0):neighbours UnboundedHexGrid (0,0))
 
     rp <- renderPacket pl grassMat pipeline
 
@@ -84,14 +86,15 @@ init = do
 
     -- newEntityUI "Hex Grid" (makeComponents settings makeRenderTiles')
 
-  pure $ Game meshes [sandMat, grassMat] [sand, grass] pipeline sampler
+  pure $ Game meshes [sandMat, grassMat] [sand, grass] pipeline sampler terrain
 
-makeRenderTiles :: RenderPipeline _ -> [Material HexMaterial] -> [Mesh] -> [(Int,Int)] -> SceneGraph World ()
-makeRenderTiles gridPipeline [grassMat, sandMat] gmeshes ixs =
-  forM_ (zip ixs (cycle gmeshes)) $ \((q,r),gridMesh) ->
-    let mat = if r == 0 || q `mod` r == 0 then grassMat else sandMat in do
-      liftIO $ print(q,r)
-      rp <- renderPacket gridMesh mat gridPipeline
+makeRenderTiles :: RenderPipeline _ -> Terrain -> [(Int,Int)] -> SceneGraph World ()
+makeRenderTiles gridPipeline terr ixs =
+  forM_ ixs $ \(q,r) ->
+    let mat = fst $ terr ! (q,r)
+        mesh = snd $ terr ! (q,r)
+     in do
+      rp <- renderPacket mesh mat gridPipeline
       newEntity (rp, Hexagon q r, makeHexTransform (q,r))
 
 makeHexTransform :: (Int,Int) -> Transform
@@ -126,9 +129,9 @@ movePlayer g hexDir = do
 
         sceneGraph $ do
           forM_ toAdd $ \(q,r) -> do
-            rp <- renderPacket (head g.meshes) (head g.materials) g.pipeline
+            rp <- renderPacket (snd $ g.terrain ! (q,r)) (fst $ g.terrain ! (q,r)) g.pipeline
             let tr = makeHexTransform (q,r)
-                tr' = tr{Ghengin.Component.Transform.position = withVec3 tr.position (\x y z -> vec3 x 1 z)} :: Transform
+                tr' = tr{Ghengin.Component.Transform.position = withVec3 tr.position (\x _ z -> vec3 x 1 z)} :: Transform
             newEntity (rp, Hexagon q r, tr', transformAnimation @World (vec3 0 (-1) 0) tr'.position (pure ()))
           
 

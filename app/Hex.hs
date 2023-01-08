@@ -60,7 +60,7 @@ makeHexMeshes size percent = do
                                           vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
                                           vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders
                                           vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
-  pure [flatMesh]
+  pure [flatMesh, flatMesh, flatMesh]
 
 
 data Hexagon = Hexagon Int Int
