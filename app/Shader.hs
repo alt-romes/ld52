@@ -29,7 +29,7 @@ type VertexDefs
      -- For now the three locations (0,1,2) are fixed on the mesh, but later they will not be fixed
   = '[ "in_position" ':-> Input '[ Location 0 ] (V 3 Float)
      , "in_normal"   ':-> Input '[ Location 1 ] (V 3 Float)
-     , "in_color"    ':-> Input '[ Location 2 ] (V 3 Float)
+     , "in_color"    ':-> Input '[ Location 2 ] (V 3 Float) -- Because we don't have custom meshes yet, we'll use in-color as a boolean to indicate whether this is a border vertice or not
 
      -- Entry point, this is the vertex shader
      , "main"        ':-> EntryPoint '[] Vertex
@@ -62,6 +62,7 @@ type FragmentDefs
 
 
       , "tile_tex" ':-> Texture2D '[ DescriptorSet 1, Binding 0 ] (RGBA8 UNorm)
+      , "border" ':-> Uniform '[ DescriptorSet 1, Binding 1 ] (Struct '[ "color" ':-> V 3 Float ])
       ]
 
 
@@ -85,8 +86,14 @@ fragment = shader do
     ~(Vec2 px pz)       <- get @"2d_pos"
     ~(Vec3 icx icy icz) <- get @"in_color"
     ~(Vec3 camx camy camz) <- use @(Name "camera_pos" :.: Name "val")
+    ~(Vec3 bcr bcg bcb)    <- use @(Name "border" :.: Name "color")
 
     ~(Vec4 tx ty tz _) <- use @(ImageTexel "tile_tex") NilOps (Vec2 px pz)
 
-    put @"out_col" (Vec4 (icx*tx) (icy*ty) (icz*tz) 1)
+    let isBorder = icx == 0
+
+    if isBorder then put @"out_col" (Vec4 bcr bcg bcb 1)
+                else put @"out_col" (Vec4 (icx*tx) (icy*ty) (icz*tz) 1)
+
+-- TODO: Sinusoidal animations
 

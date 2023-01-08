@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE DataKinds #-}
 
 -- | Module to handle generation of hexagonal grid meshes and game-level calculations wrt hexagonal coordinates
@@ -7,22 +8,48 @@ module Hex where
 import GHC.Records
 import qualified Data.List as List
 
+import Ghengin.Asset.Texture
+import qualified Data.Map as M
+import qualified Data.Vector as V
 import Control.Monad
 import Data.IORef
+import Ghengin.Vulkan
+import Ghengin.Scene.Graph
+import Ghengin.Component.Material
+import Ghengin.Component.Camera
+import Ghengin.Component.Transform
 import Ghengin.Component.Mesh
 import Ghengin.Component
 import Ghengin.Component.UI
-import Ghengin.Utils hiding (Index)
 import Ghengin.Render.Packet
 import Ghengin
 
-import Math.Geometry.Grid
+import Math.Geometry.Grid hiding (size)
 import Math.Geometry.Grid.Hexagonal
+
+data World = World { renderPackets :: !(Storage RenderPacket)
+                   , transforms    :: !(Storage Transform)
+                   , modelMatrices :: !(Storage ModelMatrix)
+                   , cameras       :: !(Storage Camera)
+                   , uiwindows     :: !(Storage (UIWindow World))
+                   , entityParents :: !(Storage Parent)
+                   , entityCounter :: !(Storage EntityCounter)
+                   , hexes         :: !(Storage Hexagon)
+                   }
+
+
+data Hexagon = Hexagon Int Int
+  deriving Show
+instance Component Hexagon where type Storage Hexagon = Map Hexagon
 
 -- | Create a hexagonal grid with given size centered on the axial coordinates
 -- (0,0)
 createHexGrid :: Int -> HexHexGrid
 createHexGrid = hexHexGrid
+
+-- TODO: Ideally we would be able to upload a big mesh and index into it depending on the hex tile
+-- For now it'll do...
+-- Why are 15 tiles SO ridiculously slow? Batching the vertices really does make a difference
 
 -- | Generate a renderable mesh from a HexGrid.
 --
@@ -39,28 +66,29 @@ createHexGrid = hexHexGrid
 -- (4) Create faces of hexagon using the 3d vertices
 -- (5) Create bottom faces
 -- (6) Create side faces using vertices from bottom and top faces
-hexGridMesh :: Float -> Float -> HexHexGrid -> Ghengin w Mesh
-hexGridMesh size innerPercent hgrid = do
+hexGridMeshes :: Float -> Float -> HexHexGrid -> Ghengin w (M.Map (Int,Int) Mesh)
+hexGridMeshes size innerPercent hgrid = do
   let faceixs = indices hgrid
 
       -- | (1) and (2) and (3)
-      hexfaces = map (makeHexFace size innerPercent) faceixs
-
       -- | (4) now done in the hex face
-      verts = concatMap (\(HexFace vs _) -> vs) hexfaces
-      ixs   = concatMap (\(HexFace _ ixs, i) -> map (+(i*19)) ixs) (zip hexfaces [0..length hexfaces]) -- 19 is number of vertices per face
+      hexfaces = map (makeHexFace size innerPercent) faceixs
       
-  lift $ createMeshWithIxs (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0)
-                           (List.cycle [vec3 1 1 1,
+  hxs <- lift $ forM hexfaces $ \(HexFace q r verts ixs) -> do
+    ((q,r),) <$> createMeshWithIxs
+            (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0)
+                                   (List.cycle [vec3 1 1 1,
                                           vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
-                                          vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, -- Outer hex for borders
-                                          vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4, vec3 0.4 0.4 0.4])) ixs
+                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders
+                                          vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0])) ixs
   -- The first of the seven colors is white and represents the center of the
   -- hexagon. The corners are black and the interpolation will make a black
   -- border.
+  pure $ M.fromList hxs
 
 -- | Hex face: the vertices and indices to form a face
-data HexFace = HexFace ![Vec3] -- ^ vertices in this face
+data HexFace = HexFace Int Int -- ^ q and r coords
+                       ![Vec3] -- ^ vertices in this face
                        ![Int]  -- ^ indices
   deriving Show
 
@@ -95,15 +123,15 @@ hexCornerOffset size percent ix =
 
 -- | A Hex face is composed of one center, 6 corners, and 6 triangular faces composed of them
 makeHexFace :: Float -> Float -> Index HexHexGrid -> HexFace
-makeHexFace size percent (q, r) =
+makeHexFace size' percent (q, r) =
   let
-    c0@(cx,cz) = hexGridTo2DWorld size (q,r)
-    corners@[(c1,c1i),(c2,c2i),(c3,c3i),(c4,c4i),(c5,c5i),(c6,c6i)]
-      = map ((\((cnx,cnz), (cnix,cniz)) -> (vec3 (cnx + cx) 1 (cnz + cz), vec3 (cnix + cx) 1 (cniz + cz)) ) . hexCornerOffset size percent) [0..5]
+    (cx,cz) = hexGridTo2DWorld size' (q,r)
+    [(c1,c1i),(c2,c2i),(c3,c3i),(c4,c4i),(c5,c5i),(c6,c6i)]
+      = map ((\((cnx,cnz), (cnix,cniz)) -> (vec3 (cnx + cx) 1 (cnz + cz), vec3 (cnix + cx) 1 (cniz + cz)) ) . hexCornerOffset size' percent) [0..5]
     
   in
     --        C0           1    2     3   4     5   6    7    8     9   10    11  12   13  14  15  16  17  18
-    HexFace [vec3 cx 1 cz, c1i, c2i, c3i, c4i, c5i, c6i, c1i, c2i, c3i, c4i, c5i, c6i, c1, c2, c3, c4, c5, c6]
+    HexFace q r [vec3 cx 1 cz, c1i, c2i, c3i, c4i, c5i, c6i, c1i, c2i, c3i, c4i, c5i, c6i, c1, c2, c3, c4, c5, c6]
             ([1, 2, 0, -- Inner hex triangle faces
              2, 3, 0,
              3, 4, 0,
@@ -131,34 +159,42 @@ data HexSettings = HexSettings { hexSize :: !(IORef Float)
                                , innerHexPercent :: !(IORef Float)
                                }
 
-instance UISettings HexSettings where
-  type ReactivityInput  HexSettings = ()
-  type ReactivityOutput HexSettings = ()
-  type ReactivityConstraints HexSettings w = (HasField "renderPackets" w (Storage RenderPacket))
-  
-  makeSettings = HexSettings <$> newIORef 1 <*> newIORef 1 <*> newIORef 0.9
+type HexMaterial = '[Vec3, Texture2D]
 
-  makeComponents s@(HexSettings hs gs ip) () = do
+instance UISettings HexSettings where
+  type ReactivityInput  HexSettings = M.Map (Int,Int) Mesh -> SceneGraph World ()
+  type ReactivityOutput HexSettings = ()
+  type ReactivityConstraints HexSettings w = (w ~ World, HasField "renderPackets" w (Storage RenderPacket), Has w (Renderer ()) Hexagon)
+  
+  makeSettings = HexSettings <$> newIORef 1 <*> newIORef 2 <*> newIORef 0.9
+
+  makeComponents s@(HexSettings hs gs ip) makeRenderTiles = do
     b1 <- sliderFloat "Hex Size" hs 0 15
     b2 <- sliderInt   "Grid Size" gs 1 15
     b3 <- sliderFloat "Inner Hex" ip 0 1
 
     -- When changed:
-    when (or [b1,b2,b3]) $ do
+    when (V.or [b1,b2,b3]) $ do
 
-      newMesh <- gridMeshFromSettings s
+      newMeshes <- gridMeshesFromSettings s
+
+      -- For now, we simply delete all hexagons but the center which has the special mat and re-do them from scratch
+
+      cmapM $ \(Hexagon _ _, (RenderPacket oldMesh _ _ _)) -> lift (freeMesh oldMesh) >> pure (Nothing :: Maybe RenderPacket)
+      
+      sceneGraph $ makeRenderTiles newMeshes
 
       -- Update all hexagons
-      cmapM $ \(RenderPacket oldMesh mat pipeline k) -> do
-        lift $ freeMesh oldMesh
-        pure $ RenderPacket newMesh mat pipeline k
+      -- cmapM $ \(RenderPacket oldMesh mat pipeline k) -> do
+      --   lift $ freeMesh oldMesh
+      --   pure $ RenderPacket newMesh mat pipeline k
 
       pure ()
 
-gridMeshFromSettings :: HexSettings -> Ghengin w Mesh
-gridMeshFromSettings (HexSettings hs gs ip) = do
-  hexS <- liftIO $ readIORef hs
+gridMeshesFromSettings :: HexSettings -> Ghengin w (M.Map (Int,Int) Mesh)
+gridMeshesFromSettings (HexSettings hs gs ip) = do
+  hexS  <- liftIO $ readIORef hs
   gridS <- liftIO $ readIORef gs
   ipS   <- liftIO $ readIORef ip
 
-  hexGridMesh hexS ipS (createHexGrid gridS)
+  hexGridMeshes hexS ipS (createHexGrid gridS)
