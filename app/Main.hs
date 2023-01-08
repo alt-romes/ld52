@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -23,6 +24,9 @@ import Ghengin.Component.Camera
 import Ghengin.Component.Material
 import Ghengin.Scene.Graph
 import Ghengin.Render.Packet
+import Ghengin.Input
+
+import Math.Geometry.Grid.HexagonalInternal (HexDirection(..))
 
 import qualified Shader
 import Hex
@@ -64,24 +68,68 @@ init = do
               , Transform (vec3 0 0 (-3)) (vec3 1 1 1) (vec3 0 0 0))
 
     newEntity ( renderPacket pl selectedMaterial gridPipeline
-              , Player
-              , Transform (vec3 0 0.5 0) (vec3 0.5 0.5 0.5) (vec3 2 0 0))
+              , Player, Transform (vec3 0 0.5 0) (vec3 0.5 0.5 0.5) (vec3 2 0 0))
 
     newEntityUI "Hex Grid" (makeComponents settings makeRenderTiles)
 
-  pure (sand, grass)
+  pure (sand, grass,sampler)
+
+
+movePlayer :: DeltaTime -> Maybe HexDirection -> Ghengin World ()
+movePlayer dt d = do
+  -- If player is moving
+  --  (1) Keep moving in the same direction by altering the transform of the player (the camera follows the player)
+  --
+  -- At the beginning of a movement (if we weren't already moving)
+  --  (1) Add 3 tiles in the direction we are travelling in
+  --  (2) Set the player to moving
+  --  (3) Move along the hex axis
+  --
+  -- When we reach the destination tile
+  --  (1) End the movement
+  --  (2) Drop the three tiles we left behind (animate through the transform by setting to "dropping")
+  --
+  -- Actually, the last two bits could fit in a generic "update entities" that moves if the things are moving, and stops moving if reached
+  liftIO $ print d
+  pure ()
+
+  
 
 update :: _ -> DeltaTime -> Ghengin World Bool
 update _ dt = do
+
   cmapM $ \(_ :: Camera, tr :: Transform) -> lift $ updateFirstPersonCameraTransform dt tr
+
+  -- Left up
+  ifPressed Key'U (movePlayer dt $ Just Northwest) (pure ())
+
+  -- Right up
+  ifPressed Key'I (movePlayer dt $ Just Northeast) (pure ())
+
+  -- Left
+  ifPressed Key'H (movePlayer dt $ Just West) (pure ())
+
+  -- Right
+  ifPressed Key'L (movePlayer dt $ Just East) (pure ())
+
+  -- Left down
+  ifPressed Key'N (movePlayer dt $ Just Southwest) (pure ())
+
+  -- Right down
+  ifPressed Key'M (movePlayer dt $ Just Southeast) (pure ())
+
+  -- Move player if it has started moving but not finished, even if nothing was pressed
+  movePlayer dt Nothing
+
   pure False
 
 end :: _ -> Ghengin w ()
-end (sand,grass) = do
+end (sand,grass,samp) = do
   dev <- lift getDevice
   -- Double freeing the sampler
   liftIO $ freeTexture dev sand
   liftIO $ freeTexture dev grass
+  liftIO $ destroySampler dev samp
   liftIO $ putStrLn "Goodbye"
 
 main :: IO ()
