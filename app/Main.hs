@@ -74,11 +74,13 @@ init = do
 
     makeRenderTiles pipeline [sandMat, grassMat] meshes ((0,0):neighbours UnboundedHexGrid (0,0))
 
-    newEntity ( Camera (Perspective (radians 65) 0.1 100) ViewTransform
-              , Transform (vec3 0 (-1) (-3)) (vec3 1 1 1) (vec3 0 0 0))
-
     rp <- renderPacket pl grassMat pipeline
-    newEntity ( rp, Player 0 0, Transform (vec3 0 (-1) 0) (vec3 0.5 0.5 0.5) (vec3 2 0 0))
+
+    newEntity' ( rp, Player 0 0, Transform (vec3 0 (-1) 0) (vec3 0.5 0.5 0.5) (vec3 0 0 0)) do
+      newEntity ( rp, Transform (vec3 0 (-1) 0) (vec3 0.5 0.5 0.5) (vec3 2 0 0))
+
+      newEntity ( Camera (Perspective (radians 65) 0.1 100) ViewTransform
+                , Transform (vec3 0 (-1) (-3)) (vec3 1 1 1) (vec3 0 0 0))
 
     -- newEntityUI "Hex Grid" (makeComponents settings makeRenderTiles')
 
