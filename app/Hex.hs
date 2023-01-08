@@ -27,6 +27,12 @@ import Ghengin
 import Math.Geometry.Grid hiding (size)
 import Math.Geometry.Grid.Hexagonal
 
+
+data Player = Player
+instance Component Player where type Storage Player = Unique Player
+
+
+
 data World = World { renderPackets :: !(Storage RenderPacket)
                    , transforms    :: !(Storage Transform)
                    , modelMatrices :: !(Storage ModelMatrix)
@@ -35,6 +41,7 @@ data World = World { renderPackets :: !(Storage RenderPacket)
                    , entityParents :: !(Storage Parent)
                    , entityCounter :: !(Storage EntityCounter)
                    , hexes         :: !(Storage Hexagon)
+                   , player        :: !(Storage Player)
                    }
 
 

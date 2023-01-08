@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -13,6 +14,7 @@ import Ghengin
 import Ghengin.Utils
 import Ghengin.Vulkan.Sampler
 import Ghengin.Component.Mesh
+import Ghengin.Component.Mesh.Sphere
 import Ghengin.Asset.Texture
 import Ghengin.Component
 import Ghengin.Component.Transform
@@ -26,12 +28,13 @@ import qualified Shader
 import Hex
 
 instance Monad m => Has World m Hexagon where getStore = SystemT (asks (.hexes))
+instance Monad m => Has World m Player where getStore = SystemT (asks (.player))
 
 
 init :: Ghengin World _
 init = do
 
-  -- TODO: Sampler should be freed separately so we can share it
+  -- TODO: Sampler should be freed separately so we can share it (apparently not?)
   sampler <- lift $ createSampler FILTER_NEAREST SAMPLER_ADDRESS_MODE_REPEAT
   sand    <- lift $ texture "assets/IMG_7472.JPG" sampler
   grass   <- lift $ texture "assets/IMG_5873.JPG" sampler
@@ -44,6 +47,8 @@ init = do
   gridPipeline <- lift $ makeRenderPipeline Shader.shaderPipeline
   gridMaterial <- lift $ material (StaticBinding (vec3 0 0 0) . Texture2DBinding sand . Done) gridPipeline
   selectedMaterial <- lift $ material (StaticBinding (vec3 1 0.74 0) . Texture2DBinding grass . Done) gridPipeline
+
+  pl <- lift $ newSphereMesh 20 Nothing
 
   sceneGraph do
 
@@ -58,6 +63,10 @@ init = do
     newEntity ( Camera (Perspective (radians 65) 0.1 100) ViewTransform
               , Transform (vec3 0 0 (-3)) (vec3 1 1 1) (vec3 0 0 0))
 
+    newEntity ( renderPacket pl selectedMaterial gridPipeline
+              , Player
+              , Transform (vec3 0 0.5 0) (vec3 0.5 0.5 0.5) (vec3 2 0 0))
+
     newEntityUI "Hex Grid" (makeComponents settings makeRenderTiles)
 
   pure (sand, grass)
@@ -70,6 +79,7 @@ update _ dt = do
 end :: _ -> Ghengin w ()
 end (sand,grass) = do
   dev <- lift getDevice
+  -- Double freeing the sampler
   liftIO $ freeTexture dev sand
   liftIO $ freeTexture dev grass
   liftIO $ putStrLn "Goodbye"
@@ -77,7 +87,7 @@ end (sand,grass) = do
 main :: IO ()
 main = do
   -- setLogLevel LogTrace
-  w <- World <$> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit
+  w <- World <$> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit <*> explInit
   ghengin w Main.init undefined update end
 
 radians :: Floating a => a -> a
