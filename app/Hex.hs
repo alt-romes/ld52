@@ -39,7 +39,7 @@ instance Component Player where type Storage Player = Unique Player
 -- This world is pretty bothersome, we gotta check where it's better to have it live.
 data World = World { renderPackets :: !(Storage RenderPacket)
                    , transforms    :: !(Storage Transform)
-                   , transformAnimations    :: !(Storage (TransformAnimation World))
+                   , transformAnimations :: !(Storage (TransformAnimation World))
                    , modelMatrices :: !(Storage ModelMatrix)
                    , cameras       :: !(Storage Camera)
                    , uiwindows     :: !(Storage (UIWindow World))
@@ -55,7 +55,7 @@ makeHexMeshes size percent = do
     case makeHexFace size percent (0,0) of
       (HexFace _ _ verts ixs) -> do
         createMeshWithIxs
-            (zipWith3 Vertex verts (List.repeat $ vec3 0 1 0)
+            (zipWith3 Vertex verts (List.repeat $ vec3 0 (-1) 0)
                                    (List.cycle [vec3 1 1 1,
                                           vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
                                           vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders

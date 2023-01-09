@@ -20,6 +20,7 @@ import Ghengin.Vulkan.Sampler
 import Ghengin.Component.Mesh
 import Ghengin.Component.Mesh.Sphere hiding (UnitFace(..), UnitSphere(..))
 import Ghengin.Component.Mesh.Hex
+import Ghengin.Component.Mesh.Obj
 import Ghengin.Asset.Texture
 import Ghengin.Component
 import Ghengin.Component.Transform
@@ -59,34 +60,36 @@ init = do
   sampler <- lift $ createSampler FILTER_LINEAR SAMPLER_ADDRESS_MODE_REPEAT
   sand    <- lift $ texture "assets/Sand.jpg" sampler
   grass   <- lift $ texture "assets/Grass.jpg" sampler
+  water   <- lift $ texture "assets/Water.jpg" sampler
 
-  meshes <- makeHexMeshes SIZE 0.92
+  human   <- lift $ loadObjMesh "assets/human.obj"
+
+  meshes <- makeHexMeshes SIZE 0.95
 
   pipeline <- lift $ makeRenderPipeline Shader.shaderPipeline
   sandMat  <- lift $ material (StaticBinding (vec3 0.9 0.75 0) . Texture2DBinding sand . Done) pipeline
   grassMat <- lift $ material (StaticBinding (vec3 0.2 1 0.2) . Texture2DBinding grass . Done) pipeline
+  waterMat <- lift $ material (StaticBinding (vec3 0.2 0.2 1) . Texture2DBinding water . Done) pipeline
 
-  let mats = [sandMat, grassMat, sandMat]
+  let mats = [waterMat, grassMat, sandMat]
 
-  pl <- lift $ newSphereMesh 20 Nothing
-
-  let terrain = makeTerrain (indices $ hexHexGrid 100) mats meshes
+  let terrain = makeTerrain (indices $ hexHexGrid 200) mats meshes
 
   sceneGraph do
 
     makeRenderTiles pipeline terrain ((0,0):neighbours UnboundedHexGrid (0,0))
 
-    rp <- renderPacket pl grassMat pipeline
+    player <- renderPacket human waterMat pipeline
 
-    newEntity' ( rp, Player 0 0, Transform (vec3 0 (-1) 0) (vec3 0.5 0.5 0.5) (vec3 0 0 0)) do
-      newEntity ( rp, Transform (vec3 0 (-1) 0) (vec3 0.5 0.5 0.5) (vec3 2 0 0))
+    newEntity' ( player, Player 0 0, Transform (vec3 0 0 0) (vec3 1.5 1.5 1.5) (vec3 0 0 0)) do
+      newEntity ( player, Transform (vec3 0 0 0.3) (vec3 0.5 0.5 0.5) (vec3 0 0 0))
 
       newEntity ( Camera (Perspective (radians 65) 0.1 100) ViewTransform
-                , Transform (vec3 0 (-1) (-3)) (vec3 1 1 1) (vec3 0 0 0))
+                , Transform (vec3 0 (-2) (-5)) (vec3 1 1 1) (vec3 (-0.6) 0 0))
 
     -- newEntityUI "Hex Grid" (makeComponents settings makeRenderTiles')
 
-  pure $ Game meshes [sandMat, grassMat] [sand, grass] pipeline sampler terrain
+  pure $ Game meshes [waterMat, grassMat, sandMat] [sand, grass, water] pipeline sampler terrain
 
 makeRenderTiles :: RenderPipeline _ -> Terrain -> [(Int,Int)] -> SceneGraph World ()
 makeRenderTiles gridPipeline terr ixs =
@@ -116,7 +119,7 @@ movePlayer g hexDir = do
   --  (1) End the movement
   --  (2) Drop the three tiles we left behind (animate through the transform by setting to "dropping")
   --
-  cmapM \(Player px py, manim :: Maybe (TransformAnimation World), Transform pos _ _) ->
+  cmapM \(Player px py, manim :: Maybe (TransformAnimation World), Transform pos scale rot) ->
     case manim of
       Nothing -> do
         -- We weren't in an animation, so we start one to the next tile
@@ -131,8 +134,8 @@ movePlayer g hexDir = do
           forM_ toAdd $ \(q,r) -> do
             rp <- renderPacket (snd $ g.terrain ! (q,r)) (fst $ g.terrain ! (q,r)) g.pipeline
             let tr = makeHexTransform (q,r)
-                tr' = tr{Ghengin.Component.Transform.position = withVec3 tr.position (\x _ z -> vec3 x 1 z)} :: Transform
-            newEntity (rp, Hexagon q r, tr', transformAnimation @World (vec3 0 (-1) 0) tr'.position (pure ()))
+                tr' = tr{Ghengin.Component.Transform.position = withVec3 tr.position (\x _ z -> vec3 x 0.5 z)} :: Transform
+            newEntity (rp, Hexagon q r, tr', transformAnimation @World (vec3 0 (-0.5) 0) tr'.position 2 (pure ()))
           
 
         -- Dropping tiles
@@ -143,13 +146,14 @@ movePlayer g hexDir = do
               fin = destroy e (Proxy @(Hexagon, TransformAnimation World, Transform, RenderPacket))
 
           if (q,r) `elem` toRem
-             then pure $ Just $ transformAnimation (vec3 0 1 0) pos' fin
+             then pure $ Just $ TransformAnimation' (vec3 0 0.5 0) (pos' + vec3 0 10 0) 2 fin
              else pure Nothing
 
 
-        pure (uncurry Player (newCoords (px,py) hexDir), Just (transformAnimation (vecFromHexDir 1 hexDir) pos (pure ())))
+-- Rename transformAnimation to positionAnimation
+        pure (uncurry Player (newCoords (px,py) hexDir), Just (transformAnimation (vecFromHexDir 1 hexDir) pos 1 (pure ())), Transform pos scale rot) -- (angleFromHexDir hexDir))
       Just ta -> do
-        pure (Player px py, Just ta)
+        pure (Player px py, Just ta, Transform pos scale rot)
 
   pure ()
 
@@ -163,6 +167,15 @@ vecFromHexDir size = \case
   Southeast -> liftHexCoord size (1,-1) - center
   where
     center = liftHexCoord size (0,0)
+
+angleFromHexDir :: HexDirection -> Vec3
+angleFromHexDir = \case
+  Northwest -> 2*pi*0.5/6
+  Northeast -> 2*pi*1.5/6
+  East      -> 2*pi*2.5/6
+  Southeast -> 2*pi*3.5/6
+  Southwest -> 2*pi*4.5/6
+  West      -> 2*pi*5.5/6
 
 newCoords :: (Int,Int) -> HexDirection -> (Int,Int)
 newCoords (x,y) = \case
@@ -219,7 +232,7 @@ update g dt = do
   ifPressed Key'N (movePlayer g Southeast) (pure ())
 
   -- Always update transform animations
-  transformAnimationUpdate 1 dt
+  transformAnimationUpdate dt
 
   pure False
 

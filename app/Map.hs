@@ -2,6 +2,7 @@
 module Map where
 import GHC.Float
 import Numeric.Noise
+import Numeric.Noise.Ridged
 import Ghengin
 import Ghengin.Component.Material
 import Ghengin.Asset.Texture
@@ -14,7 +15,7 @@ type HexMaterial = '[Vec3, Texture2D]
 newtype Terrain = Terrain (M.Map (Int,Int) (Material HexMaterial, Mesh))
 
 tileNoise :: Vec3 -> Int
-tileNoise (normalize -> WithVec3 x y z) = step (coherentNoise 0 (float2Double x, float2Double y, float2Double z)) dist
+tileNoise (normalize -> WithVec3 x y z) = step (noiseValue ridgedNoise (float2Double x, float2Double y, float2Double z)) dist
   where
     step :: Double -> [(Double,Int)] -> Int
     step _ [] = 0
@@ -22,6 +23,13 @@ tileNoise (normalize -> WithVec3 x y z) = step (coherentNoise 0 (float2Double x,
 
     dist :: [(Double, Int)]
     dist = [(0.5, 2), (0, 1)]
+
+    seed        = 1
+    octaves     = 2
+    scale       = 1
+    frequency   = 1
+    lacunarity  = 2
+    ridgedNoise = ridged seed octaves scale frequency lacunarity
 
 makeTerrain :: [(Int,Int)] -> [Material HexMaterial] -> [Mesh] -> Terrain
 makeTerrain ixs mats meshes =
