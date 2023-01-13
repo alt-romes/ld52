@@ -1,4 +1,9 @@
-## Nothing to Harvest
+## Finalized status: completely unfinished
+
+Final screenshots:
+https://ldjam.com/events/ludum-dare/52/$315169/failing-compo
+
+## Nothing to Harvest (idea)
 
 There's _Nothing to Harvest_ in your small desert home town, so you set out to
 explore for seeds to bring back.
