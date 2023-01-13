@@ -82,7 +82,7 @@ init = do
     player <- renderPacket human waterMat pipeline
 
     newEntity' ( player, Player 0 0, Transform (vec3 0 0 0) (vec3 1.5 1.5 1.5) (vec3 0 0 0)) do
-      newEntity ( player, Transform (vec3 0 0 0.3) (vec3 0.5 0.5 0.5) (vec3 0 0 0))
+      -- newEntity ( player, Transform (vec3 0 0 0.3) (vec3 0.5 0.5 0.5) (vec3 0 0 0))
 
       newEntity ( Camera (Perspective (radians 65) 0.1 100) ViewTransform
                 , Transform (vec3 0 (-2) (-5)) (vec3 1 1 1) (vec3 (-0.6) 0 0))
@@ -237,11 +237,7 @@ update g dt = do
   pure False
 
 end :: _ -> Ghengin w ()
-end Game{textures=texs, sampler=samp} = do
-  dev <- lift getDevice
-  -- Double freeing the sampler
-  forM_ texs $ liftIO . freeTexture dev
-  liftIO $ destroySampler dev samp
+end Game{} = do
   liftIO $ putStrLn "Goodbye"
 
 main :: IO ()
