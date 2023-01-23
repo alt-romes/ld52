@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wno-partial-type-signatures #-}
@@ -46,7 +47,7 @@ pattern SIZE = 1
 instance Monad m => Has World m Hexagon where getStore = SystemT (asks (.hexes))
 instance Monad m => Has World m Player where getStore = SystemT (asks (.player))
 
-data Game p = Game { meshes :: [Mesh]
+data Game p = Game { meshes :: [Mesh '[Vec3, Vec3, Vec3]]
                    , materials :: [Material HexMaterial]
                    , textures :: [Texture2D]
                    , pipeline :: RenderPipeline p
@@ -58,9 +59,9 @@ init :: Ghengin World (Game _)
 init = do
 
   sampler <- lift $ createSampler FILTER_LINEAR SAMPLER_ADDRESS_MODE_REPEAT
-  sand    <- lift $ texture "assets/Sand.jpg" sampler
-  grass   <- lift $ texture "assets/Grass.jpg" sampler
-  water   <- lift $ texture "assets/Water.jpg" sampler
+  sand    <- lift $ texture "/Users/romes/ld52/assets/Sand.jpg" sampler
+  grass   <- lift $ texture "/Users/romes/ld52/assets/Grass.jpg" sampler
+  water   <- lift $ texture "/Users/romes/ld52/assets/Water.jpg" sampler
 
   human   <- lift $ loadObjMesh "assets/human.obj"
 

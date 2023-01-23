@@ -12,7 +12,7 @@ import qualified Data.Map as M
 
 type HexMaterial = '[Vec3, Texture2D]
 
-newtype Terrain = Terrain (M.Map (Int,Int) (Material HexMaterial, Mesh))
+newtype Terrain = Terrain (M.Map (Int,Int) (Material HexMaterial, Mesh '[Vec3,Vec3,Vec3]))
 
 tileNoise :: Vec3 -> Int
 tileNoise (normalize -> WithVec3 x y z) = step (noiseValue ridgedNoise (float2Double x, float2Double y, float2Double z)) dist
@@ -31,10 +31,10 @@ tileNoise (normalize -> WithVec3 x y z) = step (noiseValue ridgedNoise (float2Do
     lacunarity  = 2
     ridgedNoise = ridged seed octaves scale frequency lacunarity
 
-makeTerrain :: [(Int,Int)] -> [Material HexMaterial] -> [Mesh] -> Terrain
+makeTerrain :: [(Int,Int)] -> [Material HexMaterial] -> [Mesh '[Vec3,Vec3,Vec3]] -> Terrain
 makeTerrain ixs mats meshes =
   Terrain $ M.fromSet (\(q,r) -> let i = tileNoise (vec3 (fromIntegral q) 1 (fromIntegral r)) in (mats !! i, meshes !! i)) (S.fromList ixs)
 
-(!) :: Terrain -> (Int, Int) -> (Material HexMaterial, Mesh)
+(!) :: Terrain -> (Int, Int) -> (Material HexMaterial, Mesh '[Vec3,Vec3,Vec3])
 (!) (Terrain m) = (m M.!)
 

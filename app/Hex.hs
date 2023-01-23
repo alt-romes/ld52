@@ -7,6 +7,7 @@ module Hex where
 
 import GHC.Float
 import GHC.Records
+import Ghengin.Component.Mesh.Vertex
 import Ghengin.Component.Mesh.Hex
 import qualified Data.List as List
 
@@ -49,13 +50,13 @@ data World = World { renderPackets :: !(Storage RenderPacket)
                    , player        :: !(Storage Player)
                    }
 
-makeHexMeshes :: Float -> Float -> Ghengin w [Mesh]
+makeHexMeshes :: Float -> Float -> Ghengin w [Mesh '[Vec3, Vec3, Vec3]]
 makeHexMeshes size percent = do
   flatMesh <- lift $
     case makeHexFace size percent (0,0) of
       (HexFace _ _ verts ixs) -> do
         createMeshWithIxs
-            (zipWith3 Vertex verts (List.repeat $ vec3 0 (-1) 0)
+            (zipWith3 (\a b c -> a :& b :&: c) verts (List.repeat $ vec3 0 (-1) 0)
                                    (List.cycle [vec3 1 1 1,
                                           vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, vec3 1 1 1, -- Inner hex
                                           vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, vec3 0 0 0, -- Outer hex for borders
@@ -86,7 +87,7 @@ createHexGrid = hexHexGrid
 -- (4) Create faces of hexagon using the 3d vertices
 -- (5) Create bottom faces
 -- (6) Create side faces using vertices from bottom and top faces
-hexGridMeshes :: Float -> [Mesh] -> HexHexGrid -> Ghengin w (M.Map (Int,Int) (Transform,Mesh))
+hexGridMeshes :: Float -> [Mesh '[Vec3, Vec3, Vec3]] -> HexHexGrid -> Ghengin w (M.Map (Int,Int) (Transform,Mesh '[Vec3, Vec3, Vec3]))
 hexGridMeshes size (head -> flatMesh) hgrid = do
   let faceixs = indices hgrid
   pure $ foldr (\(q,r) -> M.insert (q,r) (Transform (liftHexCoord size (q,r)) (vec3 1 1 1) (vec3 0 0 0), flatMesh)) mempty faceixs
